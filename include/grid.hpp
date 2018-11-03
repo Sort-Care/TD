@@ -64,14 +64,5 @@ void get_standard_deviation(const double array[], const int size,
                             double *amean,
                             double *adevia);
 
-Eigen::MatrixXd grid_softmax(struct policy& po,
-                             const int rows,
-                             const int cols);
-
-double run_gridworld_on_policy(struct policy& po);
-
-void run_cross_entropy_on_gridworld();
-
-void run_FCHC_on_gridworld();
-
+void run_TD_gridworld(Eigen::VectorXd& weights);
 #endif

@@ -43,15 +43,9 @@ void update_state(struct cart_state& cs, const double& force);
 double get_theta_ddot(struct cart_state& cs, const double& force);
 double get_x_ddot(struct cart_state& cs, const double& force);
 
-double run_cartpole_on_policy(struct policy& po);
+// generate Fourier basis state representation for cartpole problem
+Eigen::VectorXd get_Fourier_basis(struct cart_state& cs);
 
-Eigen::MatrixXd cartpole_softmax(struct policy& po,
-                                 const int rows,
-                                 const int cols);
-
-void run_cross_entropy_on_cartpole();
-
-void run_FCHC_on_cartpole();
-
-
+void run_TD_cartpole(Eigen::VectorXd& weights,
+                     const int K);
 #endif

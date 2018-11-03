@@ -84,7 +84,6 @@ void update_state(struct cart_state& cs,
 
   cs.theta += cs.theta_dot * INTERVAL + theta_ddot * INTERVAL * INTERVAL / 2.0;
   cs.theta_dot += theta_ddot * INTERVAL;
-    
 }
 
 double get_theta_ddot(struct cart_state& cs, const double& force){
@@ -97,7 +96,6 @@ double get_theta_ddot(struct cart_state& cs, const double& force){
                                           * std::cos(cs.theta))/(POLE_M + CART_M));
 
   return numerator / denominator;
-    
 }
 
 
@@ -107,140 +105,32 @@ double get_x_ddot(struct cart_state& cs, const double& force){
     / (CART_M + POLE_M);
 }
 
+/*
+ * Generate Fourier Basis representation for cart pole problem
+ */
+Eigen::VectorXd get_Fourier_basis(struct cart_state& cs,
+                                  const int K){
+  int length = pow(K+1, 4);
+  Eigen::VectorXd state_phi = Eigen::VectorXd::Zero(length);
+  Eigen::MatrixXd basis = Eigen::MatrixXd::Zero(length, 4);
+  // initialize state_phi (including normalization and assigning)
 
-double run_cartpole_on_policy(struct policy& po){
+  // initialize the basis vector
 
-  // get the policy probability table given the policy parameters
-  // that is: run the cartpole_softmax and get a returned Eigen::MatrixXd
-  // which in cart pole case should have shape (2, 162)
-  // where each column is a state
-  Eigen::MatrixXd pi = cartpole_softmax(po,NUM_LR,NUM_BUCKETS);
-    
-  // initialize the environment
-  // by setting x, x_dot, theta, theta_dot to zero
-  // ALSO!! set time to zero!!!
-  struct cart_state cs = {0.0,
-                          0.0,
-                          0.0,
-                          0.0};
-
-  double time_so_far = 0.0;
-  double reward = 0.0;
-
-  int S_t, S_tn, A_t;
-  S_t = get_bucket(cs);// initially this should be 85
-  while (S_t != -1 && time_so_far <= MAXTIME){
-    // sample an action
-    A_t = random_sample_eigen_vectors(pi.col(S_t));
-    // update the state according
-    update_state(cs,FORCES[A_t]);
-    // decide if the episode is over or not
-    S_tn = get_bucket(cs);
-    // update time
-    time_so_far += INTERVAL;
-    // get reward
-    //std::cout << "Bucket: " << S_t << "\tNext Bukt: " << S_tn << "\tAction: " << A_t << "\t Time: " << time_so_far << std::endl;
-        
-    if (S_tn != -1 && time_so_far <= MAXTIME){
-      // get reward
-      reward += 1;
-      S_t = S_tn;
-    }else{
-      break;
-    }
-    // loop until episode ends
-  }
-  // then return the rewards
-  return reward;
+  // multiply Basis with state representation
+  Eigen::VectorXd inter_phi = basis.dot(state_phi); // length, 4 x 4, = Length,
+  inter_phi *= M_PI; // multiple by pi
+  // return cosine
+  return inter_phi.cos();
 }
-
-
-void run_cross_entropy_on_cartpole(){
-  int cart_size = NUM_LR * NUM_BUCKETS; // 2 * 162 = 324
-  Eigen::VectorXd theta;
-  Eigen::MatrixXd cov;
-
-  int K = 15;
-  int E = 1;
-  int N = 1;
-  double epsi = 2;
-
-  std::vector<std::future<void>> futures;
-  REP(i, 0, 99){
-    theta = Eigen::VectorXd::Zero(cart_size);
-    cov = Eigen::MatrixXd::Constant(cart_size,
-                                    cart_size,
-                                    1);
-
-    futures.push_back(std::async(std::launch::async,
-                                 [&]{
-                                   return cross_entropy("CCE2",
-                                                        i,
-                                                        cart_size,
-                                                        theta,
-                                                        cov,
-                                                        K,
-                                                        E,
-                                                        N,
-                                                        epsi,
-                                                        eval_cart_pole_policy);
-                                 }));
-        
-  }
-
-  for(auto& e : futures){
-    e.get();
-  }
-
-  // cross_entropy(1,
-  //               cart_size,
-  //               theta,
-  //               cov,
-  //               K,
-  //               E,
-  //               N,
-  //               epsi,
-  //               eval_cart_pole_policy);
-}
-
 
 /*
- * Transfer theta to pi: R^n --> [0,1]^n
+ * Run TD update on cartpole policy
  */
-Eigen::MatrixXd cartpole_softmax(struct policy& po,
-                                 const int rows, //NUM_ACTION
-                                 const int cols){//STATE_NUM
-  //first reshape
-  Eigen::Map<Eigen::MatrixXd> reshaped(po.param.data(), rows, cols);
-  // then apply softmax
-  Eigen::MatrixXd soft = reshaped.array().exp();
-  // then normalize
-  Eigen::RowVectorXd col_mean = soft.colwise().sum();
-  //replicate before division
-  Eigen::MatrixXd repeat = col_mean.colwise().replicate(rows);
-  return soft.array() / repeat.array();
-}
+void run_TD_cartpole(Eigen::VectorXd& weights){
+  // initialize s_0
+  // using Random policy
 
-
-void run_FCHC_on_cartpole(){
-  int cart_size = NUM_LR * NUM_BUCKETS; // 92
-    
-  Eigen::VectorXd theta;
-
-  double tau = 2;
-  int N = 1;
-  //std::cout << "episode" <<'\t' << "return" << std::endl;
-  std::vector<std::future<void>> futures;
-    
-  REP (i, 0, 499){
-    theta = Eigen::VectorXd::Zero(cart_size);
-    futures.push_back(std::async(std::launch::async,
-                                 [&]{return hill_climbing("CP",
-                                                          i,
-                                                          cart_size,
-                                                          theta,
-                                                          tau,
-                                                          N,
-                                                          eval_cart_pole_policy);}));
-  }
+  // Compute TD error
+  // perform update
 }
