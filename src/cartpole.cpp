@@ -1,6 +1,5 @@
 #include "cartpole.hpp"
 
-
 /*
  * Environment Set up
  */
@@ -10,18 +9,30 @@ const double GRAV = 9.8;          // Gravitational constant
 const double CART_M = 1.0;        // Cart mass
 const double POLE_M = 0.1;        // Pole mass
 const double POLE_L = 0.5;        // Pole half length
-const double INTERVAL = 0.02;     // time step 
+const double INTERVAL = 0.02;     // time step
 const double MAXTIME = 20.2;      // Max time before end of episode
+
+// The following are here for normalizing state representation
+// in function approximation.
+const double X_MAX = 3;
+const double X_MIN = -3;
+const double X_DOT_MAX = 10;
+const double X_DOT_MIN = -10;
+const double THETA_MAX = M_PI/2;
+const double THETA_MIN = - M_PI/2;
+const double THETA_DOT_MAX = M_PI;
+const double THETA_DOT_MIN = - M_PI;
 
 const int NUM_BUCKETS = 162;
 const int NUM_LR = 2;
 
 
 const double FORCES[2] = {-FORCE, FORCE};
+const double random_pi[2] = {1, 1};
 
 /*
  * Discretize the continuous state into buckets
- * The original state has: 
+ * The original state has:
  * 1. position :  [-3.0. 3.0]
  * 2. velocity :  (-inf, inf)
  * 3. pole angle: (-M_PI/2, M_PI/2)
@@ -36,7 +47,6 @@ int get_bucket(struct cart_state& cs)
 {
   /*
    * THIS FUNCTION ACTUALLY DEFINES HOW WE SEPERATE THE BUCKETS
-   * 
    */
   int bucket = 0;
   if (cs.x < -3 ||
@@ -106,16 +116,34 @@ double get_x_ddot(struct cart_state& cs, const double& force){
 }
 
 /*
+ * Get states and normalize cart pole states and return an Eigen::VectorXd
+ * DONE: normalize cart pole state
+ */
+Eigen::VectorXd normalize_state(const struct cart_state& cs){
+  Eigen::VectorXd norm_state(4);
+  // normalize for: (using min-max normalization)
+  // 1. position
+  norm_state(0) = min_max_norm(cs.x, X_MAX, X_MIN);
+  // 2. velocity
+  norm_state(1) = min_max_norm(cs.x_dot, X_DOT_MAX, X_DOT_MIN);
+  // 3. angle
+  norm_state(2) = min_max_norm(cs.theta, THETA_MAX, THETA_MIN);
+  // 4. angular velocity
+  norm_state(3) = min_max_norm(cs.theta_dot, THETA_DOT_MAX, THETA_DOT_MIN);
+  return norm_state;
+}
+
+/*
  * Generate Fourier Basis representation for cart pole problem
+ * DONE:
+ * 1. Initialization (state, phi)
  */
 Eigen::VectorXd get_Fourier_basis(struct cart_state& cs,
                                   const int K){
-  int length = pow(K+1, 4);
-  Eigen::VectorXd state_phi = Eigen::VectorXd::Zero(length);
-  Eigen::MatrixXd basis = Eigen::MatrixXd::Zero(length, 4);
   // initialize state_phi (including normalization and assigning)
-
-  // initialize the basis vector
+  Eigen::VectorXd state_phi = normalize_state(cs); // the result should be of length 4
+  // get the Fourier basis matrix
+  Eigen::MatrixXd basis = generate_fourier_multiplier(K, 4);
 
   // multiply Basis with state representation
   Eigen::VectorXd inter_phi = basis.dot(state_phi); // length, 4 x 4, = Length,
@@ -126,11 +154,48 @@ Eigen::VectorXd get_Fourier_basis(struct cart_state& cs,
 
 /*
  * Run TD update on cartpole policy
+ * Input:
+ * - weights: the weights to be updated during this episode. Should be of
+ *            shape (k+1)^4 - 1
+ * - K: Fourier order
+ * - step_size: learning rate of TD
  */
-void run_TD_cartpole(Eigen::VectorXd& weights){
+void run_TD_cartpole(Eigen::VectorXd& weights,
+                     const int K,
+                     const double step_size){
   // initialize s_0
-  // using Random policy
+  struct cart_state cs = {0, 0, 0, 0};
+  int A_t;
+  double time_so_far = 0.0; // time recorded for ending episode
+  double r = 0.0; // reward got at time t
+  double v_s;
+  double v_s_prime;
+  double td_error = 0.0;
 
-  // Compute TD error
-  // perform update
+  int S_t = get_bucket(cs);
+  while(S_t != -1 && time_so_far <= MAXTIME){
+    // using Random policy, select random action in {LEFT, RIGHT}
+    A_t = random_sample_weights(random_pi, NUM_LR);
+    // before update, get the old state value function
+    Eigen::VectorXd old_state_phi = get_Fourier_basis(cs, K);
+    v_s = weights.dot(old_state_phi); // (L,).(L,) = scalar
+    // update the underlying state, given action's force
+    update_state(cs, FORCES[A_t]);
+    // update time
+    time_so_far += INTERVAL;
+    // get current state bucket
+    S_t = get_bucket(cs);
+    // Get r
+    if (S_t != -1 && time_so_far <= MAXTIME){ // not failing and time in horizon
+      r = 1;
+      v_s_prime = weights.dot(get_Fourier_basis(cs, K));
+    }else{
+      r = 0;
+      v_s_prime = 0;
+    }
+    // Compute TD error, assuming gamma = 1.0
+    td_error = r + v_s_prime - v_s;
+    // perform update
+    weights += step_size * td_error * old_state_phi; // scalar * scalar * vector;
+  }
 }

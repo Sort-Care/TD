@@ -27,5 +27,4 @@ double random_range(double range);
  */
 int random_sample_eigen_vectors(const Eigen::VectorXd& vec);
 
-
 #endif

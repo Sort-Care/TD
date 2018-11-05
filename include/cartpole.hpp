@@ -7,8 +7,9 @@
 #include <algorithm>
 #include <Eigen/Dense>
 
-#include "bbo.hpp"
+#include "fourier_td.hpp"
 #include "random_sampling.hpp"
+#include "norm.hpp"
 
 struct cart_state {
     double x;        // position
@@ -25,6 +26,14 @@ extern const double POLE_M;
 extern const double POLE_L;
 extern const double INTERVAL;
 extern const double MAXTIME;
+extern const double X_MAX;
+extern const double X_MIN;
+extern const double X_DOT_MAX;
+extern const double X_DOT_MIN;
+extern const double THETA_MAX;
+extern const double THETA_MIN;
+extern const double THETA_DOT_MAX;
+extern const double THETA_DOT_MIN;
 
 extern const int NUM_BUCKETS;
 extern const int NUM_LR;
@@ -36,16 +45,21 @@ enum CART_ACTIONS {CLEFT, CRIGHT};
  * function that take in the current real state of cart pole
  * and map that into a bucket number.
  */
-int get_bucket(struct cart_state& cs);
+int get_bucket(struct cart_stat490.00e& cs);
 
 void update_state(struct cart_state& cs, const double& force);
 
 double get_theta_ddot(struct cart_state& cs, const double& force);
 double get_x_ddot(struct cart_state& cs, const double& force);
 
+// takes in state representation, and normalize and generate state representation
+Eigen::VectorXd normalize_state(const struct cart_state& cs);
+
 // generate Fourier basis state representation for cartpole problem
-Eigen::VectorXd get_Fourier_basis(struct cart_state& cs);
+Eigen::VectorXd get_Fourier_basis(struct cart_state& cs,
+                                  const int K);
 
 void run_TD_cartpole(Eigen::VectorXd& weights,
-                     const int K);
+                     const int K,
+                     const double step_size);
 #endif

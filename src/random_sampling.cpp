@@ -13,14 +13,11 @@ int random_sample_distribution(const double distribution[], const int size){
         sum += distribution[i];
     }
     printf("\n");
-    
-    
 
     if(sum == 1.0){//valid
             // will generate [0,1]
         double rnum = random_zero_to_one();
         printf("%f\n", rnum);
-        
         REP(i, 0, size-1){
             printf("%d: %.2f\t rnum: %.2f\n", i, distribution[i], rnum);
             if (rnum < distribution[i]) return i;
@@ -51,7 +48,6 @@ int random_sample_weights(const double weights[], const int size){
         }
     }
     return (-1);
-    
 }
 
 int random_sample_eigen_vectors(const Eigen::VectorXd& vec){
