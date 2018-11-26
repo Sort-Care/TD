@@ -1,0 +1,91 @@
+* Sarsa
+** TODO Issues [100%]
+   :LOGBOOK:
+   CLOCK: [2018-11-23 Fri 16:17]--[2018-11-23 Fri 17:02] =>  0:45
+   :END:
+   - [X] When using softmax action selection with large step size, the action selection could return -1 because the qw goes to very small.
+   - [X] Appears that the algorithm is not learning when using epsilon greedy.
+   - [X] Found that the Fourier Basis function wasn't right. Fixed.
+   - [X] Epsilon Greedy: decaying epsilon
+Note:
+Finally I identified the issue was I forgot to update the st_phi after each iteration.
+
+** Hyper-parameter Tuning
+*** Cart Pole
+    - [ ] number of episodes
+    - [ ] step size
+    - [ ] action selection
+      - [ ] Softmax: thu
+      - [ ] Epsilon greedy: epsilon
+    - [ ] order of Fourier basis
+*** Grid World
+
+** Result
+*** CP
+   For the result here, i am using epsilon decaying with division $\epsilon / (i+1)$ where $i$ is the number of episodes running in sarsa. Epsilon starts from 0.6.
+   - For /epsilon greedy/ action selection.
+     1. Used for plotting:
+        - step size: *1e-3*
+        - order: *3rd*
+        - convergence: _200_
+     2. Faster one:
+        - step size: *1e-3*
+        - order: *5rd*
+        - convergence: _20_
+
+   - For /Softmax action/ selection, try not to be too aggressive on step size because some value in q weights can go to -nan.
+     - BEST HPs for SOFTMAX: (converges around 120 episodes)
+       - step size: *1e-5*
+       - order: *5th*
+       - convergence: _100_
+
+|----------------------+-----------+---------------+-------------|
+| Method               | Step Size | Fourier Order | Convergence |
+|----------------------+-----------+---------------+-------------|
+| Sarsa(Epsilon)       |      1e-3 |             3 |         200 |
+| Sarsa(Epsilon)       |      1e-4 |             5 |          20 |
+| !Sarsa(Epsilon)      |    0.0003 |             5 |          90 |
+|----------------------+-----------+---------------+-------------|
+| Sarsa(Softmax)       |      1e-5 |             5 |         120 |
+|----------------------+-----------+---------------+-------------|
+| !Q Learning          |      0.01 |             3 |          50 |
+| Q Learning           |     0.001 |             3 |         200 |
+| Q Learning           |    0.0005 |             5 |         200 |
+| Q Learning           |      1e-7 |             7 |          10 |
+| !Q Learning(SoftMax) |      7e-6 |             5 |          60 |
+|----------------------+-----------+---------------+-------------|
+
+*** GW
+|---------------------+-----------+-------------+-------------|
+| Method              | Step Size | Epsilon/Tau | Convergence |
+|---------------------+-----------+-------------+-------------|
+| Sarsa(Epsilon)      |      0.09 |         0.8 |         100 |
+| Sarsa(Softmax)      |      0.09 |           5 |         100 |
+| Q-Learning(Epsilon) |       0.1 |         0.8 |         100 |
+| Q-Learning(Softmax) |       0.1 |           5 |         100 |
+|---------------------+-----------+-------------+-------------|
+
+Appears that in grid world, the softmax one tends to train much faster than epsilon greedy. Epsilon greedy seems to be easy to stuck on early episodes.
+
+On cart pole, q learning with softmax action selection is more sensitive to step size. Large step size will cause it to diverge. And it is harder to find a step size range that works well for cart pole using softmax on q learning with out leading to divergence after a while. I failed to find a step size that works for 3rd order Fourier basis function, but was able to find some step size for 5th order. However, that slows down the running of the program because the higher the order is, more computation is needed. As to performance, the softmax q learning leads to a more stable and earlier convergence in most cases.
+
+* Alternative Function Approximation Method
+1. Tile Coding?
+2. Radial Basis Functions?
+3. Polynomial?
+
+|------------+-----------+---------+-------+---|
+| Method     | Step Size | Epsilon | Order |   |
+|------------+-----------+---------+-------+---|
+| Polynomial |      7e-3 |     0.8 |     4 |   |
+|            |   6.25e-3 |         |     4 |   |
+|            |   6.22e-3 |         |       |   |
+|            |   6.15e-3 |     0.4 |       |   |
+|            |   4.55e-3 |         |       |   |
+|            |   5.05e-3 |         |       |   |
+|------------+-----------+---------+-------+---|
+
+Polynomial is so hard to get it to work. Giving up.
+Polynomial:
+Shrank the epsilon for the greedy.
+
