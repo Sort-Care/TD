@@ -7,8 +7,10 @@
 #include <stdio.h>
 #include <algorithm>
 #include <Eigen/Dense>
+#include <fstream>
 
-#include "bbo.hpp"
+#include "tabular_td.hpp"
+#include "on_policy.hpp"
 
 //Total number of states
 extern const int STATE_NUM;
@@ -64,5 +66,32 @@ void get_standard_deviation(const double array[], const int size,
                             double *amean,
                             double *adevia);
 
-void run_TD_gridworld(Eigen::VectorXd& weights);
+double run_TD_gridworld(Eigen::VectorXd& vf,
+                        const double step_size);
+
+double gw_start_TD();
+
+double run_sarsa_gridworld(const int episode,
+                           Eigen::VectorXd& qf,
+                           const double step_size,
+                           const int explore_mode);
+
+double run_qlearning_gridworld(const int episode,
+                               Eigen::VectorXd& qf,
+                               const double step_size,
+                               const int explore_mode);
+
+int tabular_epsilon_greedy(const double epsilon,
+                           const Eigen::VectorXd& qf,
+                           const int S_t);
+
+int tabular_softmax(const double thu,
+                    const Eigen::VectorXd& qf,
+                    const int S_t);
+
+int get_best_action(const Eigen::VectorXd& qf,
+                    const int S_t);
+
+void start_sarsa_gw();
+void start_qlearning_gw();
 #endif

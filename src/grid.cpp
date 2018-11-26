@@ -382,10 +382,240 @@ void get_standard_deviation(const double array[],
 /*
  * Run TD update of grid world.
  */
-void run_TD_gridworld(Eigen::VectorXd& weights){
+double run_TD_gridworld(Eigen::VectorXd& vf,
+                        const double step_size){
   // initialize s_0
-  int s_0 = 0;
+  int S_t, A_t, S_tn;
+  int cnt = 0;
+  double r = 0.0;
+  double td_error;
+  double MSE = 0.0;
+  S_t = random_sample_weights(d_0, 23);
+  while (S_t != absorbing_state-1){
+    A_t = random_sample_weights(pr_actions, 4);
+    S_tn = random_sample_weights(trans_table[S_t * NUM_ACTION + A_t], STATE_NUM + 1);
+    //std::cout << "S_tn: " << S_tn << std::endl;
+    if (S_tn == absorbing_state-1){
+      r = 0;
+      td_error = r - vf[S_t];
+    }else{
+      r = GW[state_to_coor[S_tn][X]][state_to_coor[S_tn][Y]];
+      td_error = r + dis_gamma * vf[S_tn] - vf[S_t];
+      //std::cout << "TD_error: "<< r << "+" << dis_gamma <<"*" << vf[S_tn] << "-" << vf[S_t] << std::endl;
+    }
+    vf[S_t] += step_size * td_error;
+    //std::cout << "VF: " << vf[S_t] << "\t "<< "TD: " << td_error << std::endl;
+    MSE += td_error * td_error;
+    S_t = S_tn;
+  }
   // using Random policy
   // Compute TD error
   // perform update
+  return MSE;
+}
+
+double gw_start_TD(){
+  generateInput();
+  double step_sizes[10];
+  double MSES[10];
+  REP(i, 0, 9){
+    step_sizes[i] = 0.1 / pow(10, i);
+    MSES[i] = tabular_TD(100, 23, step_sizes[i], run_TD_gridworld);
+  }
+  REP(i, 0, 9){
+    std::cout << step_sizes[i] << "\t" << MSES[i] << "\t" << std::endl;
+  }
+}
+
+
+/*=============================== SARSA ====================================*/
+double run_sarsa_gridworld(const int episode,
+                           Eigen::VectorXd& qf,// size 23 * 4 (23 position, 4 actions each)
+                           const double step_size,
+                           const int explore_mode){
+  int S_t, A_t, S_tn, A_tn;
+  double r = 0.0;
+  double target = 0.0;
+  int step_cnt = 0;
+  double td_error = 0.0;
+  double epsilon = 0.6 / (episode + 1);
+  double thu = 5;
+  double qs, qsp;
+
+  // S_t = random_sample_weights(d_0, 23);
+  S_t = 0;
+  // use epsilon greedy or softmax to select an action
+  if (explore_mode == 0){
+    // use epsilon greedy case
+    A_t = tabular_epsilon_greedy(epsilon, qf, S_t);
+  }else{
+    // use Softmax action selection
+    A_t = tabular_softmax(thu, qf, S_t);
+  }
+  while (S_t != absorbing_state - 1){
+    // take action
+    S_tn = random_sample_weights(trans_table[S_t *  NUM_ACTION + A_t], STATE_NUM +1);
+    if (S_tn == absorbing_state-1){
+      r = 0;
+      qsp = 0;
+      qs = qf(S_t * NUM_ACTION + A_t);
+      td_error = r + dis_gamma * qsp - qs;
+    }else{
+      r = GW[state_to_coor[S_tn][X]][state_to_coor[S_tn][Y]];
+      target += pow(dis_gamma, step_cnt) * r;
+      // choose action for S_tn
+      if (explore_mode == 0){
+        // use epsilon greedy case
+        A_tn = tabular_epsilon_greedy(epsilon, qf, S_tn);
+      }else{
+        // use Softmax action selection
+        A_tn = tabular_softmax(thu, qf, S_tn);
+      }
+      td_error = r + dis_gamma * qf(S_tn * NUM_ACTION + A_tn) - qf(S_t * NUM_ACTION + A_t);
+    }
+    qf(S_t * NUM_ACTION + A_t) += step_size * td_error;
+    S_t = S_tn;
+    A_t = A_tn;
+    step_cnt ++;
+  }
+  return target;
+}
+
+int tabular_epsilon_greedy(const double epsilon,
+                           const Eigen::VectorXd& qf,
+                           const int S_t){
+  double mode_weights[2] = {epsilon, 1-epsilon};
+  int mode_index = random_sample_weights(mode_weights, 2);
+  int action = 0;
+  if (mode_index == 0){
+    // uniformly random
+    double random_weights[NUM_ACTION] = {1,1,1,1};
+    action = random_sample_weights(random_weights, 4);
+  }else{
+    // pick the best among qf.segment(S_t * NUM_ACTION, NUM_ACTION)
+    int start_index = S_t * NUM_ACTION;
+    int max_index = 0;
+    double maxq = 0.0;
+    REP(i, 0, NUM_ACTION - 1){
+      if (qf(start_index + i) > maxq){
+        maxq = qf(start_index + i);
+        max_index = i;
+      }
+    }
+    action = max_index;
+  }
+  return action;
+}
+
+int tabular_softmax(const double thu,
+                    const Eigen::VectorXd& qf,
+                    const int S_t){
+  // perform softmax action selection.
+  Eigen::VectorXd q_st = qf.segment(S_t * NUM_ACTION, NUM_ACTION);
+  q_st *= thu; // q(s,a) * thu
+  q_st = q_st.array().exp(); // exp(q(s,a)*thu)
+  double sum  = q_st.sum();  // denominator
+  q_st /= sum;
+  int action = random_sample_eigen_vectors(q_st);
+  return action;
+}
+
+/*=============================== q LEARNING ===============================*/
+double run_qlearning_gridworld(const int episode,
+                               Eigen::VectorXd& qf,
+                               const double step_size,
+                               const int explore_mode){
+  // Q-Learning Tabular
+  int S_t, A_t, S_tn;
+  double r = 0.0;
+  double target = 0.0;
+  int step_cnt = 0;
+  double td_error = 0.0;
+  double epsilon = 0.8 / (episode + 1);
+  double thu = 5;
+  double qs, qsp;
+
+  // S_t = random_sample_weights(d_0, 23);
+  S_t = 0;
+  while (S_t != absorbing_state -1 ){
+    if (explore_mode == 0){
+      A_t = tabular_epsilon_greedy(epsilon, qf, S_t);
+    }else{
+      A_t = tabular_softmax(thu, qf, S_t);
+    }
+    S_tn = random_sample_weights(trans_table[S_t * NUM_ACTION + A_t], STATE_NUM + 1);
+    if (S_tn == absorbing_state -1 ){
+      r = 0;
+      qs = qf(S_t * NUM_ACTION + A_t);
+      qsp = 0;
+      td_error = r + dis_gamma * qsp - qs;
+    }else{
+      r = GW[state_to_coor[S_tn][X]][state_to_coor[S_tn][Y]];
+      target += pow(dis_gamma, step_cnt) * r;
+      int A_tn = get_best_action(qf, S_tn);
+      td_error = r + dis_gamma * qf(S_tn * NUM_ACTION + A_tn) - qf(S_t * NUM_ACTION + A_t);
+    }
+    qf(S_t * NUM_ACTION + A_t) += step_size * td_error;
+    S_t = S_tn;
+    step_cnt ++;
+  }
+  return target;
+}
+
+int get_best_action(const Eigen::VectorXd& qf,
+                    const int S_t){
+  int start_index = S_t * NUM_ACTION;
+  int max_index = 0;
+  double maxq = 0.0;
+  REP(i, 0, NUM_ACTION-1){
+    if (qf(start_index + i) > maxq){
+      maxq = qf(start_index+i);
+      max_index = i;
+    }
+  }
+  return max_index;
+}
+
+/*============================ FUNCTIONS CALLED by MAIN =============================*/
+void start_sarsa_gw(){
+  int num_episodes = 100;
+  double step_size = 0.09;
+  int explore_mode = 0;
+  int q_table_size = STATE_NUM * NUM_ACTION;
+
+  Eigen::MatrixXd result(100, 100);
+  generateInput();
+
+  REP(i, 0, 99){
+    result.row(i) = on_policy_tabular(num_episodes,
+                                      step_size,
+                                      explore_mode,
+                                      q_table_size,
+                                      run_sarsa_gridworld);
+  }
+  std::ofstream mfile;
+  mfile.open("gw_sarsa_ep.dat");
+  mfile << result << '\n';
+  mfile.close();
+}
+
+void start_qlearning_gw(){
+  int num_episodes = 100;
+  double step_size = 0.1;
+  int explore_mode = 0;
+  int q_table_size = STATE_NUM * NUM_ACTION;
+
+  Eigen::MatrixXd result(100, 100);
+  generateInput();
+  REP(i, 0, 99){
+    result.row(i) = on_policy_tabular(num_episodes,
+                                      step_size,
+                                      explore_mode,
+                                      q_table_size,
+                                      run_qlearning_gridworld);
+  }
+  std::ofstream mfile;
+  mfile.open("gw_ql_ep.dat");
+  mfile << result << '\n';
+  mfile.close();
 }
