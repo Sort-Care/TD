@@ -94,4 +94,6 @@ int get_best_action(const Eigen::VectorXd& qf,
 
 void start_sarsa_gw();
 void start_qlearning_gw();
+
+double run_ql_lambda_gw()
 #endif
